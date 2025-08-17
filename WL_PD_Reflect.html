@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Development Feedback</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chat-bubble {
+            max-width: 75%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            word-wrap: break-word;
+        }
+        .user-bubble {
+            background-color: #3B82F6; /* blue-500 */
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .gemini-bubble {
+            background-color: #E5E7EB; /* gray-200 */
+            color: #1F2937; /* gray-800 */
+            border-bottom-left-radius: 4px;
+        }
+        #chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        #chat-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        #chat-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        #chat-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+    <div class="w-full max-w-2xl h-full md:h-[90vh] bg-white rounded-lg shadow-lg flex flex-col p-4 md:p-6">
+        <header class="border-b pb-4 mb-4">
+            <h1 class="text-2xl font-bold text-gray-800">AI in Education: PD Feedback</h1>
+            <p class="text-sm text-gray-500">Please answer the following questions to help us improve.</p>
+        </header>
+
+        <div id="chat-container" class="flex-1 overflow-y-auto mb-4 p-4 bg-gray-50 rounded-lg space-y-4">
+            <!-- Chat messages will be appended here -->
+        </div>
+
+        <div id="loading-indicator" class="hidden flex items-center justify-start mb-4 px-4">
+             <div class="gemini-bubble flex items-center">
+                <div class="w-2 h-2 bg-gray-500 rounded-full animate-pulse"></div>
+                <div class="w-2 h-2 bg-gray-500 rounded-full animate-pulse mx-1" style="animation-delay: 0.2s;"></div>
+                <div class="w-2 h-2 bg-gray-500 rounded-full animate-pulse" style="animation-delay: 0.4s;"></div>
+            </div>
+        </div>
+        
+        <div id="email-button-container" class="hidden text-center mb-4">
+             <!-- Changed this from a button to an anchor tag for better compatibility -->
+             <a id="email-transcript-btn" href="#" class="block bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition duration-300 ease-in-out w-full">
+                Email Transcript
+            </a>
+        </div>
+
+        <div class="border-t pt-4">
+            <form id="chat-form" class="flex items-center">
+                <input type="text" id="user-input" class="flex-1 border border-gray-300 rounded-lg py-3 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type your answer here..." disabled>
+                <button type="submit" id="send-btn" class="ml-3 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-5 rounded-lg transition duration-300 ease-in-out" disabled>
+                    Send
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const chatForm = document.getElementById('chat-form');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const emailButtonContainer = document.getElementById('email-button-container');
+        const emailTranscriptBtn = document.getElementById('email-transcript-btn');
+
+        // --- Configuration ---
+        const recipientEmail = "daniellove@teachers.wlcsd.org";
+        
+        const questions = [
+            // Note: The first question is handled by the startConversation function.
+            "Great, thank you for sharing. Now, let's reflect on the professional development session about using AI in education. What are 3 key things you learned?",
+            "Those are excellent takeaways. It's great that you're thinking deeply about this. What are 2 questions you still have about using AI in education?",
+            "Those are very thoughtful questions. Finally, what is 1 specific application of AI you plan to implement in your classroom or professional practice after this session?"
+        ];
+        
+        let currentQuestionIndex = 0;
+        let conversationHistory = [];
+        let chatHistoryForApi = [];
+
+        // --- Main Application Logic ---
+
+        window.onload = () => {
+            startConversation();
+        };
+
+        chatForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            handleUserResponse();
+        });
+        
+        function startConversation() {
+            const firstQuestion = "Welcome! To get started, could you please share your role in Walled Lake, the level that best describes you (high school, middle school, or elementary), and how long you've been an educator?";
+            addMessage('gemini', firstQuestion);
+            conversationHistory.push({ speaker: 'Gemini', text: firstQuestion });
+            enableUserInput();
+        }
+
+        async function handleUserResponse() {
+            const userMessage = userInput.value.trim();
+            if (!userMessage) return;
+
+            addMessage('user', userMessage);
+            conversationHistory.push({ speaker: 'You', text: userMessage });
+            userInput.value = '';
+            disableUserInput();
+            showLoading();
+
+            // Prepare prompt for Gemini based on the current step
+            let prompt;
+            if (currentQuestionIndex === 0) {
+                prompt = `An educator has just introduced themselves with the following information: "${userMessage}". Welcome them warmly based on their role/experience and then smoothly ask the first reflection question: "${questions[0]}"`;
+            } else if (currentQuestionIndex === 1) {
+                 prompt = `The educator shared 3 takeaways from an AI in education PD session: "${userMessage}". Provide brief, positive, and targeted feedback on their reflections. Then, ask the next question: "${questions[1]}"`;
+            } else if (currentQuestionIndex === 2) {
+                prompt = `The educator shared 2 questions they still have about AI in education: "${userMessage}". Acknowledge their questions as insightful. Then, ask the final question: "${questions[2]}"`;
+            } else {
+                prompt = `The educator shared one way they plan to apply AI: "${userMessage}". Give some encouraging feedback on their idea and then conclude the conversation by saying something like, "That sounds like a fantastic plan! Thank you for all your thoughtful feedback. That was the last question. You can now click the button below to email the transcript."`;
+            }
+            
+            chatHistoryForApi.push({ role: "user", parts: [{ text: userMessage }] });
+
+            try {
+                const geminiResponse = await callGeminiAPI(prompt);
+                
+                chatHistoryForApi.push({ role: "model", parts: [{ text: geminiResponse }] });
+                addMessage('gemini', geminiResponse);
+                conversationHistory.push({ speaker: 'Gemini', text: geminiResponse });
+                
+                currentQuestionIndex++;
+
+                if (currentQuestionIndex <= questions.length) {
+                    enableUserInput();
+                } else {
+                    endConversation();
+                }
+
+            } catch (error) {
+                console.error("Error calling Gemini API:", error);
+                addMessage('gemini', "I'm sorry, I seem to be having trouble connecting. Please try again later.");
+                enableUserInput();
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        async function callGeminiAPI(prompt, retries = 3, delay = 1000) {
+            const apiKey = ""; // API key is handled by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            
+            const tempChatHistory = [...chatHistoryForApi];
+            tempChatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+            const payload = {
+                contents: tempChatHistory
+            };
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                     if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        return result.candidates[0].content.parts[0].text;
+                    } else {
+                        console.warn("Gemini response was empty or invalid.", result);
+                        return "Thank you for that information. Let's move on to the next question.";
+                    }
+                } catch (error) {
+                    console.error(`API call attempt ${i + 1} failed. Retrying in ${delay / 1000}s...`, error);
+                    if (i < retries - 1) {
+                        await new Promise(res => setTimeout(res, delay));
+                        delay *= 2; // Exponential backoff
+                    } else {
+                        throw error;
+                    }
+                }
+            }
+        }
+
+        function endConversation() {
+            userInput.placeholder = "Thank you for your feedback!";
+            generateMailtoLink(); // Generate the link once the conversation is over
+            emailButtonContainer.classList.remove('hidden');
+        }
+
+        function generateMailtoLink() {
+            const subject = "WL AI PD Feedback";
+            let body = "Hello,\n\nHere is the transcript of my feedback session:\n\n";
+            
+            conversationHistory.forEach(entry => {
+                body += `${entry.speaker}:\n${entry.text}\n\n`;
+            });
+
+            body += "--------------------------------\nEnd of Transcript";
+
+            const mailtoLink = `mailto:${recipientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            
+            // Set the href of the anchor tag
+            emailTranscriptBtn.href = mailtoLink;
+        }
+
+        // --- UI Helper Functions ---
+
+        function addMessage(sender, text) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('chat-bubble', sender === 'user' ? 'user-bubble' : 'gemini-bubble', 'self-' + (sender === 'user' ? 'end' : 'start'));
+            
+            const wrapper = document.createElement('div');
+            wrapper.classList.add('flex', 'w-full', 'justify-' + (sender === 'user' ? 'end' : 'start'));
+
+            messageElement.innerText = text;
+            wrapper.appendChild(messageElement);
+            chatContainer.appendChild(wrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function enableUserInput() {
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            userInput.focus();
+        }
+
+        function disableUserInput() {
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+        }
+        
+        function showLoading() {
+            loadingIndicator.classList.remove('hidden');
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function hideLoading() {
+            loadingIndicator.classList.add('hidden');
+        }
+
+    </script>
+</body>
+</html>
