@@ -1,5 +1,7 @@
 ## Hi there 👋
 
+This space is designed to guide educators through the 3-2-1 Reflection activity, a powerful tool for consolidating learning. Educators will reflect on a lesson by identifying three things they learned, two questions they have, and one way they can apply their new knowledge. The AI will provide personalized feedback to refine their reflections, ensuring they get the most out of their learning experience.
+
 <!--
 **DanielLove-web/DanielLove-web** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
